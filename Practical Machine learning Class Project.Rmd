@@ -1,0 +1,129 @@
+---
+title: 'Peer-graded Assignment: Prediction Assignment Writeup'
+author: "Neha"
+date: "7/29/2020"
+output: html_document
+---
+## Course Project : Practical Machine Learning : Analysing Quality of Physical Excercise.
+
+### Synopsis 
+
+The Project aims at using large amount of data from devices such as Jawbone Up, Nike FuelBand, and Fitbit to  quantify how well the individuals are doing the respective exercises. The data was obtained from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways and the data was used to train a prediction algorithm to judge the quality of exercise. The best algorithm was used to predict the quality of test dataset of unknown quality.
+
+#### Setup 
+This code sets the global display to always include codes and loads the required libraries. 
+
+```{r setup}
+library(ggplot2)
+suppressMessages(library(caret))
+suppressMessages(library(randomForest))
+suppressMessages(library(rattle))
+``` 
+
+#### Data downloading
+The data is downloaded from the mentioned links and loaded into R environment. The data was briefly explored to undertand the structure and the variables.
+
+```{r Downloading,load and exploring data, cache=TRUE }
+url_train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+Training_data<- read.csv(url_train, na.strings = c("", "NA"))
+dim(Training_data)
+#head(Training_data) #commented to reduce output 
+url_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+Test_data <- read.csv(url_test, na.strings = c("", "NA"))
+dim(Test_data)
+#head(Test_data) #commented to reduce output 
+```
+
+#### Data partitioning
+
+The Training data was partitioned into training set and test set for cross validation. The Training set consisted of 70% of the dataset while the test set consisted of 30% of the dataset
+```{r Data Partition, cache=TRUE }
+# partition the training data into training and test(cross validation) set
+set.seed(230)
+inTrain <- createDataPartition(y=Training_data$classe, p=0.7, list=F)
+Training <- Training_data[inTrain, ]
+Test <- Training_data[-inTrain, ]
+```
+
+#### Tidying Data and Selecting Features 
+
+This was done in three steps:  
+
+    1. All variables with very small/negligible variations were excluded from use in the model.
+    2. A number of columns had "NA" in most rows, all columns with "NA" in them were excluded.
+    3. The columns with names of participants and other features unfit for predictive purposes were excluded. 
+    
+```{r Feature Selection, cache=TRUE }
+#removing near-zero variance predictors
+Zero_Var <- nearZeroVar(Training_data)
+Training <- Training[, -Zero_Var]
+Test <-Test[, -Zero_Var]
+#removing all predictors with any NA value
+Training <- Training[, colSums(is.na(Training)) == 0]
+Test <- Test[, colSums(is.na(Test)) == 0]
+#removing columns unfit for prediction (ID, user_name, raw_timestamp_part_1,etc.)
+Training <- Training[, -(1:7)]
+Test <- Test[, -(1:7)]
+```
+
+#### Model Selection
+
+Three different machine learning algorithms were applied on the training set and tested for accuracy on the test set. These included:
+
+    1. Recursive Partitioning and Regression Trees (rpart)
+    2. Linear discriminant analysis (LDA)
+    3. Random forest (rf)
+    
+#### Recursive Partitioning and Regression Trees (rpart)
+
+```{r rpart, cache=TRUE }
+#training the algorithm using training set
+tree_model <- train(classe~., method="rpart", data = Training)
+#predicting for the test set using the trained algorithm
+prediction_tree <- predict(tree_model, Test)
+#checking the accuracy of predictions
+confusionMatrix(Test$classe, prediction_tree)
+# visualizing the tree created
+fancyRpartPlot(tree_model$finalModel)
+```  
+
+
+The method is less time consuming and gives a visual advantage but has very poor accuracy of `r confusionMatrix(Test$classe, prediction_tree)$overall[1]*100`
+
+#### Linear discriminant analysis (LDA)
+
+```{r lda, cache=TRUE }
+#training the algorithm using training set
+lda_model<- train(classe~., method="lda", data = Training)
+#predicting for the test set using the trained algorithm
+prediction_lda <- predict(lda_model, Test)
+#checking the accuracy of predictions
+confusionMatrix(Test$classe, prediction_lda )
+```
+Time wise the is very economical but accuracy is still poor at `r confusionMatrix(Test$classe, prediction_lda)$overall[1]*100`.
+
+#### Random forest (rf)
+
+```{r rf, cache=TRUE }
+#training the algorithm using training set
+rf_model <- train(classe ~., method = "rf", data = Training, ntree=250)
+#predicting for the test set using the trained algorithm
+prediction_rf <- predict(rf_model, Test)
+#checking the accuracy of predictions
+confusionMatrix(Test$classe, prediction_rf )
+```
+
+The random forest is been told to be the most accurate giving an accuracy of `r confusionMatrix(Test$classe, prediction_rf)$overall[1]*100`. However the time taken for development of the model is long.
+
+#### Conclusion
+
+Out of the three predictive models, random forest gives the most accurate predictions. Thus we will use the random forest model to make predictions on the testing data provided with the question.
+
+#### Prediction on Testing data
+
+```{r testing data prediction, cache=TRUE }
+testing_rf <- predict(rf_model, Test_data)
+testing_rf
+cases <- Test_data$X
+data.frame(cases, testing_rf)
+```
